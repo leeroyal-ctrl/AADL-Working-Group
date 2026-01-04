@@ -1,0 +1,725 @@
+"""
+AADL: AI Agent Decision Logging Protocol
+Version: 0.1.0 (Draft)
+License: Apache 2.0
+
+This module defines the core data structures for AADL as Python types.
+These types can be used for:
+1. Implementation reference
+2. Validation
+3. Serialization/deserialization
+4. Documentation
+
+For full specification, see: docs/SPECIFICATION.md
+"""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+from uuid import UUID, uuid4
+
+
+# ============================================================================
+# Core Enumerations
+# ============================================================================
+
+class OptimizationTarget(str, Enum):
+    """Target direction for optimization dimension."""
+    MINIMIZE = "minimize"
+    MAXIMIZE = "maximize"
+    MAINTAIN = "maintain"
+    BALANCE = "balance"
+
+
+class DissonanceSeverity(str, Enum):
+    """Severity level for dissonance events."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class InterventionRecommendation(str, Enum):
+    """Recommended intervention action."""
+    NONE = "none"
+    MONITOR = "monitor"
+    HUMAN_REVIEW = "human_review"
+    HUMAN_APPROVAL_REQUIRED = "human_approval_required"
+    HALT = "halt"
+    ESCALATE = "escalate"
+
+
+class DecisionStatus(str, Enum):
+    """Status of a decision in its lifecycle."""
+    PENDING = "pending"
+    EXECUTED = "executed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ROLLED_BACK = "rolled_back"
+
+
+# ============================================================================
+# Core Data Structures
+# ============================================================================
+
+@dataclass
+class OptimizationDimension:
+    """
+    Represents a single dimension that factors into an agent's decision.
+    
+    Examples: cost_efficiency, regulatory_compliance, customer_satisfaction,
+              response_time, risk_mitigation, innovation_potential
+    """
+    dimension: str
+    """Name of the optimization dimension (e.g., 'cost_efficiency')"""
+    
+    weight: float
+    """Relative weight given to this dimension (0.0 to 1.0)"""
+    
+    target: OptimizationTarget
+    """Whether to minimize, maximize, maintain, or balance this dimension"""
+    
+    actual_value: Optional[float] = None
+    """Actual measured value for this dimension (optional)"""
+    
+    target_value: Optional[float] = None
+    """Target value for this dimension (optional)"""
+    
+    unit: Optional[str] = None
+    """Unit of measurement (e.g., 'USD', 'seconds', 'percentage')"""
+    
+    description: Optional[str] = None
+    """Human-readable description of this dimension"""
+    
+    def __post_init__(self):
+        if not 0.0 <= self.weight <= 1.0:
+            raise ValueError(f"Weight must be between 0.0 and 1.0, got {self.weight}")
+
+
+@dataclass
+class TradeOff:
+    """
+    Represents a trade-off made during decision-making.
+    
+    Captures what was deprioritized in favor of what was prioritized.
+    """
+    deprioritized: str
+    """What was deprioritized (dimension or value)"""
+    
+    prioritized: str
+    """What was prioritized instead"""
+    
+    magnitude: float
+    """Magnitude of the trade-off (0.0 to 1.0)"""
+    
+    justification: Optional[str] = None
+    """Explanation for why this trade-off was made"""
+    
+    reversible: bool = True
+    """Whether this trade-off can be reversed"""
+    
+    def __post_init__(self):
+        if not 0.0 <= self.magnitude <= 1.0:
+            raise ValueError(f"Magnitude must be between 0.0 and 1.0, got {self.magnitude}")
+
+
+@dataclass
+class ContextSource:
+    """
+    Represents a source of context used in decision-making.
+    
+    Used for provenance tracking - what information the agent had access to.
+    """
+    source_id: str
+    """Identifier for the context source"""
+    
+    source_type: str
+    """Type of source (e.g., 'database', 'api', 'vector_db', 'user_input')"""
+    
+    timestamp: datetime
+    """When this context was retrieved"""
+    
+    version: Optional[str] = None
+    """Version of the source (for reproducibility)"""
+    
+    query: Optional[str] = None
+    """Query used to retrieve this context"""
+    
+    content_hash: Optional[str] = None
+    """Hash of the content for verification"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional metadata about the source"""
+
+
+@dataclass
+class AlternativeConsidered:
+    """
+    Represents an alternative decision that was considered but not chosen.
+    """
+    alternative_id: str
+    """Unique identifier for this alternative"""
+    
+    description: str
+    """Description of the alternative"""
+    
+    score: Optional[float] = None
+    """Score assigned to this alternative"""
+    
+    reason_not_chosen: Optional[str] = None
+    """Why this alternative was not selected"""
+    
+    optimization_dimensions: List[OptimizationDimension] = field(default_factory=list)
+    """How this alternative scored on each dimension"""
+
+
+@dataclass
+class Decision:
+    """
+    Core AADL data structure representing a decision made by an AI agent.
+    
+    This is the primary object logged by agents using the AADL protocol.
+    """
+    decision_id: str
+    """Unique identifier for this decision"""
+    
+    agent_id: str
+    """Identifier of the agent that made this decision"""
+    
+    timestamp: datetime
+    """When the decision was made"""
+    
+    decision_type: str
+    """Type/category of decision (e.g., 'budget_allocation', 'route_optimization')"""
+    
+    optimization_dimensions: List[OptimizationDimension]
+    """Dimensions considered in making this decision"""
+    
+    trade_offs: List[TradeOff] = field(default_factory=list)
+    """Trade-offs made during decision-making"""
+    
+    decision_output: Dict[str, Any] = field(default_factory=dict)
+    """The actual decision/output produced"""
+    
+    confidence: Optional[float] = None
+    """Agent's confidence in this decision (0.0 to 1.0)"""
+    
+    context_sources: List[ContextSource] = field(default_factory=list)
+    """Sources of context used in decision-making"""
+    
+    alternatives_considered: List[AlternativeConsidered] = field(default_factory=list)
+    """Other options that were considered"""
+    
+    rationale: Optional[str] = None
+    """Human-readable explanation of the decision"""
+    
+    status: DecisionStatus = DecisionStatus.EXECUTED
+    """Current status of the decision"""
+    
+    parent_decision_id: Optional[str] = None
+    """If this decision is part of a larger decision, link to parent"""
+    
+    related_decision_ids: List[str] = field(default_factory=list)
+    """Other related decisions"""
+    
+    tags: List[str] = field(default_factory=list)
+    """Tags for categorization and search"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional metadata"""
+    
+    # OpenTelemetry integration
+    trace_id: Optional[str] = None
+    """OpenTelemetry trace ID for distributed tracing"""
+    
+    span_id: Optional[str] = None
+    """OpenTelemetry span ID"""
+    
+    def __post_init__(self):
+        if self.confidence is not None and not 0.0 <= self.confidence <= 1.0:
+            raise ValueError(f"Confidence must be between 0.0 and 1.0, got {self.confidence}")
+
+
+@dataclass
+class OrganizationalAnchor:
+    """
+    Represents a persistent organizational value or priority.
+    
+    Anchors are the organizational values against which agent decisions
+    are measured for alignment.
+    
+    Examples: "customer_trust", "regulatory_compliance", "innovation",
+              "cost_efficiency", "employee_wellbeing"
+    """
+    anchor_id: str
+    """Unique identifier for this anchor"""
+    
+    name: str
+    """Short name for the anchor"""
+    
+    definition: str
+    """Clear definition of what this anchor represents"""
+    
+    weight: float
+    """Importance of this anchor relative to others (0.0 to 1.0)"""
+    
+    scope: List[str] = field(default_factory=list)
+    """Which agents/domains this anchor applies to (e.g., ['customer-facing-agents'])"""
+    
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    """When this anchor was created"""
+    
+    last_updated: datetime = field(default_factory=datetime.utcnow)
+    """When this anchor was last updated"""
+    
+    updated_by: Optional[str] = None
+    """Who last updated this anchor"""
+    
+    rationale: Optional[str] = None
+    """Why this anchor exists/is important"""
+    
+    measurement_criteria: Dict[str, Any] = field(default_factory=dict)
+    """How to measure alignment with this anchor"""
+    
+    active: bool = True
+    """Whether this anchor is currently active"""
+    
+    tags: List[str] = field(default_factory=list)
+    """Tags for categorization"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional metadata"""
+    
+    def __post_init__(self):
+        if not 0.0 <= self.weight <= 1.0:
+            raise ValueError(f"Weight must be between 0.0 and 1.0, got {self.weight}")
+
+
+@dataclass
+class ContributingFactor:
+    """
+    Represents how a specific dimension contributes to alignment with an anchor.
+    """
+    dimension: str
+    """The optimization dimension"""
+    
+    contribution: float
+    """Positive = aligned, negative = misaligned"""
+    
+    explanation: Optional[str] = None
+    """Why this dimension contributes this way"""
+
+
+@dataclass
+class AlignmentScore:
+    """
+    Represents how well a decision aligns with an organizational anchor.
+    
+    This is a key governance metric in AADL.
+    """
+    alignment_id: str
+    """Unique identifier for this alignment measurement"""
+    
+    decision_id: str
+    """The decision being measured"""
+    
+    anchor_id: str
+    """The anchor being measured against"""
+    
+    score: float
+    """Alignment score (0.0 = completely misaligned, 1.0 = perfectly aligned)"""
+    
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    """When this alignment was calculated"""
+    
+    contributing_factors: List[ContributingFactor] = field(default_factory=list)
+    """Breakdown of what contributed to this score"""
+    
+    method: Optional[str] = None
+    """Method used to calculate alignment (e.g., 'weighted_dimensions', 'ml_model')"""
+    
+    confidence: Optional[float] = None
+    """Confidence in this alignment calculation"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional metadata"""
+    
+    def __post_init__(self):
+        if not 0.0 <= self.score <= 1.0:
+            raise ValueError(f"Score must be between 0.0 and 1.0, got {self.score}")
+        if self.confidence is not None and not 0.0 <= self.confidence <= 1.0:
+            raise ValueError(f"Confidence must be between 0.0 and 1.0, got {self.confidence}")
+
+
+@dataclass
+class DissonanceEvent:
+    """
+    Represents a governance event where a decision falls below alignment threshold.
+    
+    Dissonance events trigger intervention workflows.
+    """
+    event_id: str
+    """Unique identifier for this dissonance event"""
+    
+    decision_id: str
+    """The decision that triggered dissonance"""
+    
+    anchor_id: str
+    """The anchor that was misaligned with"""
+    
+    alignment_score: float
+    """The alignment score that triggered this event"""
+    
+    threshold: float
+    """The threshold that was violated"""
+    
+    severity: DissonanceSeverity
+    """Severity level of this dissonance"""
+    
+    recommendation: InterventionRecommendation
+    """Recommended intervention action"""
+    
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    """When this event was detected"""
+    
+    affected_stakeholders: List[str] = field(default_factory=list)
+    """Who should be notified (e.g., ['compliance', 'operations'])"""
+    
+    agent_id: str = ""
+    """Agent that made the decision"""
+    
+    decision_type: str = ""
+    """Type of decision that caused dissonance"""
+    
+    root_cause: Optional[str] = None
+    """Analysis of why dissonance occurred"""
+    
+    remediation_plan: Optional[str] = None
+    """Plan for addressing the dissonance"""
+    
+    resolved: bool = False
+    """Whether this dissonance has been resolved"""
+    
+    resolved_at: Optional[datetime] = None
+    """When this was resolved"""
+    
+    resolved_by: Optional[str] = None
+    """Who resolved this"""
+    
+    resolution_notes: Optional[str] = None
+    """Notes on how this was resolved"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional metadata"""
+    
+    def __post_init__(self):
+        if not 0.0 <= self.alignment_score <= 1.0:
+            raise ValueError(f"Alignment score must be between 0.0 and 1.0, got {self.alignment_score}")
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ValueError(f"Threshold must be between 0.0 and 1.0, got {self.threshold}")
+
+
+# ============================================================================
+# Multi-Agent Structures
+# ============================================================================
+
+@dataclass
+class AgentCoordinationEvent:
+    """
+    Represents coordination between multiple agents.
+    
+    Used for tracking how agents coordinate decisions.
+    """
+    coordination_id: str
+    """Unique identifier for this coordination event"""
+    
+    participating_agents: List[str]
+    """List of agent IDs involved"""
+    
+    coordination_type: str
+    """Type of coordination (e.g., 'sequential', 'parallel', 'hierarchical')"""
+    
+    initiating_agent: str
+    """Agent that initiated coordination"""
+    
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    """When coordination occurred"""
+    
+    decisions_involved: List[str] = field(default_factory=list)
+    """Decision IDs that were coordinated"""
+    
+    shared_context: Dict[str, Any] = field(default_factory=dict)
+    """Context shared between agents"""
+    
+    outcome: Optional[str] = None
+    """Result of coordination"""
+    
+    conflicts: List[Dict[str, Any]] = field(default_factory=list)
+    """Any conflicts that arose during coordination"""
+    
+    resolution_method: Optional[str] = None
+    """How conflicts were resolved"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional metadata"""
+
+
+# ============================================================================
+# Audit and Compliance Structures
+# ============================================================================
+
+@dataclass
+class AuditTrailEntry:
+    """
+    Represents an entry in the audit trail.
+    
+    Provides comprehensive record for regulatory compliance.
+    """
+    entry_id: str
+    """Unique identifier for this audit entry"""
+    
+    timestamp: datetime
+    """When this entry was created"""
+    
+    event_type: str
+    """Type of event being audited"""
+    
+    actor: str
+    """Who/what performed the action (agent, human, system)"""
+    
+    action: str
+    """What action was performed"""
+    
+    target: Optional[str] = None
+    """What was affected by the action"""
+    
+    decision_id: Optional[str] = None
+    """Associated decision, if applicable"""
+    
+    before_state: Optional[Dict[str, Any]] = None
+    """State before the action"""
+    
+    after_state: Optional[Dict[str, Any]] = None
+    """State after the action"""
+    
+    justification: Optional[str] = None
+    """Why the action was taken"""
+    
+    ip_address: Optional[str] = None
+    """IP address of actor, if applicable"""
+    
+    session_id: Optional[str] = None
+    """Session identifier"""
+    
+    compliance_flags: List[str] = field(default_factory=list)
+    """Relevant compliance frameworks (e.g., ['GDPR', 'SOC2'])"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional audit metadata"""
+
+
+@dataclass
+class ComplianceReport:
+    """
+    Aggregated compliance report for a time period or set of decisions.
+    """
+    report_id: str
+    """Unique identifier for this report"""
+    
+    period_start: datetime
+    """Start of reporting period"""
+    
+    period_end: datetime
+    """End of reporting period"""
+    
+    decisions_analyzed: int
+    """Number of decisions included in this report"""
+    
+    dissonance_events: int
+    """Number of dissonance events detected"""
+    
+    anchors_evaluated: List[str] = field(default_factory=list)
+    """Which anchors were evaluated"""
+    
+    average_alignment_scores: Dict[str, float] = field(default_factory=dict)
+    """Average alignment per anchor"""
+    
+    high_risk_decisions: List[str] = field(default_factory=list)
+    """Decision IDs flagged as high risk"""
+    
+    interventions_required: int = 0
+    """Number of interventions required"""
+    
+    interventions_completed: int = 0
+    """Number of interventions completed"""
+    
+    regulatory_frameworks: List[str] = field(default_factory=list)
+    """Which regulatory frameworks this report addresses"""
+    
+    findings: List[str] = field(default_factory=list)
+    """Key findings from analysis"""
+    
+    recommendations: List[str] = field(default_factory=list)
+    """Recommendations for improvement"""
+    
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+    """When this report was generated"""
+    
+    generated_by: Optional[str] = None
+    """Who/what generated this report"""
+    
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional report metadata"""
+
+
+# ============================================================================
+# Version Information
+# ============================================================================
+
+@dataclass
+class AADLVersion:
+    """
+    Version information for AADL protocol implementation.
+    """
+    protocol_version: str = "0.1.0"
+    """AADL protocol version"""
+    
+    implementation_version: Optional[str] = None
+    """Version of this specific implementation"""
+    
+    compatible_versions: List[str] = field(default_factory=lambda: ["0.1.0"])
+    """List of compatible AADL protocol versions"""
+    
+    extensions: List[str] = field(default_factory=list)
+    """Any extensions or custom features implemented"""
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def generate_decision_id() -> str:
+    """Generate a unique decision ID."""
+    return f"dec_{uuid4().hex[:12]}"
+
+
+def generate_anchor_id() -> str:
+    """Generate a unique anchor ID."""
+    return f"anc_{uuid4().hex[:12]}"
+
+
+def generate_alignment_id() -> str:
+    """Generate a unique alignment ID."""
+    return f"aln_{uuid4().hex[:12]}"
+
+
+def generate_dissonance_id() -> str:
+    """Generate a unique dissonance event ID."""
+    return f"dis_{uuid4().hex[:12]}"
+
+
+def generate_audit_id() -> str:
+    """Generate a unique audit trail entry ID."""
+    return f"aud_{uuid4().hex[:12]}"
+
+
+# ============================================================================
+# Example Usage (for documentation)
+# ============================================================================
+
+if __name__ == "__main__":
+    # Example: Creating a decision
+    decision = Decision(
+        decision_id=generate_decision_id(),
+        agent_id="budget-optimizer-v2.1",
+        timestamp=datetime.utcnow(),
+        decision_type="budget_allocation",
+        optimization_dimensions=[
+            OptimizationDimension(
+                dimension="cost_efficiency",
+                weight=0.87,
+                target=OptimizationTarget.MAXIMIZE,
+                actual_value=0.82,
+                unit="percentage"
+            ),
+            OptimizationDimension(
+                dimension="regulatory_compliance",
+                weight=0.34,
+                target=OptimizationTarget.MAXIMIZE,
+                actual_value=0.91,
+                unit="percentage"
+            )
+        ],
+        trade_offs=[
+            TradeOff(
+                deprioritized="compliance_buffer",
+                prioritized="operational_spending",
+                magnitude=0.53,
+                justification="Low risk environment, efficiency prioritized"
+            )
+        ],
+        decision_output={
+            "allocated_budget": 2300000,
+            "departments": {
+                "operations": 1500000,
+                "compliance": 800000
+            }
+        },
+        confidence=0.87,
+        rationale="Allocated budget to maximize operational efficiency while maintaining regulatory compliance"
+    )
+    
+    # Example: Creating an organizational anchor
+    anchor = OrganizationalAnchor(
+        anchor_id=generate_anchor_id(),
+        name="customer_trust",
+        definition="Prioritize customer data protection and transparency in all decisions",
+        weight=0.92,
+        scope=["customer-facing-agents", "data-processing-agents"],
+        measurement_criteria={
+            "data_protection": "Must encrypt all customer PII",
+            "transparency": "Must provide explanation for customer-impacting decisions"
+        }
+    )
+    
+    # Example: Creating an alignment score
+    alignment = AlignmentScore(
+        alignment_id=generate_alignment_id(),
+        decision_id=decision.decision_id,
+        anchor_id=anchor.anchor_id,
+        score=0.61,
+        contributing_factors=[
+            ContributingFactor(
+                dimension="regulatory_compliance",
+                contribution=0.34,
+                explanation="Strong compliance alignment"
+            ),
+            ContributingFactor(
+                dimension="cost_efficiency",
+                contribution=-0.21,
+                explanation="Cost optimization conflicts with trust measures"
+            )
+        ],
+        method="weighted_dimensions"
+    )
+    
+    # Example: Creating a dissonance event
+    dissonance = DissonanceEvent(
+        event_id=generate_dissonance_id(),
+        decision_id=decision.decision_id,
+        anchor_id=anchor.anchor_id,
+        alignment_score=0.61,
+        threshold=0.75,
+        severity=DissonanceSeverity.MEDIUM,
+        recommendation=InterventionRecommendation.HUMAN_REVIEW,
+        agent_id=decision.agent_id,
+        decision_type=decision.decision_type,
+        affected_stakeholders=["compliance", "operations"],
+        root_cause="Cost optimization prioritized over customer trust measures"
+    )
+    
+    print(f"Decision ID: {decision.decision_id}")
+    print(f"Anchor ID: {anchor.anchor_id}")
+    print(f"Alignment Score: {alignment.score}")
+    print(f"Dissonance Event: {dissonance.event_id} (Severity: {dissonance.severity.value})")
